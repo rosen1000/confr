@@ -3,19 +3,24 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"io/ioutil"
 	"os"
 )
 
 func main() {
 	conf_file, err := os.OpenFile("./conf.json", os.O_RDWR|os.O_CREATE, 0755)
-	var data []byte
 	var result map[string]interface{}
-	conf_file.Read(data)
-	fmt.Println(data)
-	err1 := json.Unmarshal(data, &result)
+	bytes, err2 := ioutil.ReadFile("./conf.json")
+	data := string(bytes[:])
+	if err2 != nil {
+		fmt.Println("err2:", err2)
+	}
+
+	fmt.Println("data:", data)
+	err1 := json.Unmarshal(bytes, &result)
 	if err1 != nil {
-		log.Fatal(err)
+		fmt.Println("err1:", err)
+		os.Exit(1)
 	}
 	fmt.Println(result)
 	// data := &ConfJSON{User: "hax", HomePath: "/home/hax"}
