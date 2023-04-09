@@ -30,14 +30,13 @@ func main() {
 		Aliases: []string{"list"},
 		Short:   "List available configs",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Println("List command")
 			conf := ReadFile()
-			text := ""
+			text := []string{}
 			for i := 0; i < len(conf.Files); i++ {
 				file := conf.Files[i]
-				text += fmt.Sprintf("%v%v (%v):\n%v%v\n", ansicodes.Blue, file.Path, file.DisplayName, ansicodes.Reset, file.Content)
+				text = append(text, fmt.Sprintf("%v%v%v:\n  Size: %v bytes\n  Path: %v\n  Modified: %v", ansicodes.Blue, file.DisplayName, ansicodes.Reset, len(file.Content), file.Path, file.Modified))
 			}
-			fmt.Println(text)
+			fmt.Println(strings.Join(text, "\n"))
 		},
 	}
 
@@ -75,7 +74,7 @@ func main() {
 					return
 				}
 			}
-			
+
 			var file FileJSON
 			file.DisplayName = args[0]
 			path, err := filepath.Abs(args[1])
