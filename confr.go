@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -40,19 +41,47 @@ func main() {
 		},
 	}
 
+	var ignoreTime bool
 	saveCmd := &cobra.Command{
 		Use:   "save [name] [path]",
 		Short: "Save file to configs",
 		Run: func(cmd *cobra.Command, args []string) {
 			conf := ReadFile()
+
+			replace := false
+			replaceIndex := 0
+			displayName, filePath := args[0], args[1]
+			stats, err := os.Stat(filePath)
+			CatchErr(err, "Error while checking file:")
+			for i, file := range conf.Files {
+				if !ignoreTime && file.Modified.Equal(stats.ModTime()) {
+					fmt.Println("File not changed. Ignoring")
+					return
+				}
+
+				absPath, err := filepath.Abs(filePath)
+				CatchErr(err, "File not found:")
+				if file.DisplayName == displayName || file.Path == absPath {
+					fmt.Printf("Found the following:\n  Name: %v\n  Size: %v bytes\n  Path: %v\n  Modified: %v\n", file.DisplayName, len(file.Content), file.Path, file.Modified)
+					fmt.Print("Overwrite? (y/n) ")
+					scanner := bufio.NewScanner(os.Stdin)
+					scanner.Scan()
+					option := strings.ToLower(scanner.Text())
+					if option == "y" || option == "yes" {
+						replace = true
+						replaceIndex = i
+						break
+					}
+					return
+				}
+			}
+			
 			var file FileJSON
 			file.DisplayName = args[0]
 			path, err := filepath.Abs(args[1])
 			CatchErr(err)
 			file.Path = path
 
-			stats, err := os.Stat(file.Path)
-			CatchErr(err, "Error while checking file:")
 			if stats.IsDir() {
 				panic("Directories are not implemented")
 			}
@@ -69,12 +98,20 @@ func main() {
 			CatchErr(err)
 			file.Content = string(bytes)
 
-			conf.Files = append(conf.Files, file)
+			if replace {
+				fmt.Println()
+				conf.Files = append(conf.Files[:replaceIndex], conf.Files[:replaceIndex+1]...)
+			} else {
+				conf.Files = append(conf.Files, file)
+			}
 
 			WriteFile(conf)
+			fmt.Println("Saved!")
 		},
 		Args: cobra.ExactArgs(2),
 	}
+
+	saveCmd.Flags().BoolVar(&ignoreTime, "ignore-time", false, "Bypasses check if a config has changed")
 
 	rmCmd := &cobra.Command{
 		Use:   "rm [config-name]",
@@ -96,7 +133,8 @@ func main() {
 
 	initCmd := &cobra.Command{
 		Use:   "init",
-		Short: "Init config file storage",
+		Short: "Explicidly init config file storage",
+		Long:  "Explicidly initialize config file storage and provide all information about it like location and such",
 		Run: func(cmd *cobra.Command, args []string) {
 			conf := ConfJSON{}
 			User, err := user.Current()
@@ -119,8 +157,10 @@ func ReadFile() ConfJSON {
 	var result ConfJSON
 	bytes, err := os.ReadFile(CONF_PATH)
 	if err != nil {
-		fmt.Println("Error reading from config file:\n", err)
-		os.Exit(1)
+		fmt.Println("Conf file not found. Creating new...")
+		conf := ConfJSON{}
+		WriteFile(conf)
+		return conf
 	}
 	if err := json.Unmarshal(bytes, &result); err != nil {
 		fmt.Println("Error parsing from config file:\n", err)
@@ -130,7 +170,7 @@ func ReadFile() ConfJSON {
 }
 
 func WriteFile(conf ConfJSON) {
-	bytes, err := json.Marshal(conf)
+	bytes, err := json.MarshalIndent(conf, "", "  ")
 	if err != nil {
 		fmt.Println("Error parsing config:\n", err)
 		os.Exit(1)
