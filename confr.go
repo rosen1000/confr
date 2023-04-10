@@ -63,9 +63,7 @@ func main() {
 				if file.DisplayName == displayName || file.Path == absPath {
 					fmt.Printf("Found the following:\n  Name: %v\n  Size: %v bytes\n  Path: %v\n  Modified: %v\n", file.DisplayName, len(file.Content), file.Path, file.Modified)
 					fmt.Print("Overwrite? (y/n) ")
-					scanner := bufio.NewScanner(os.Stdin)
-					scanner.Scan()
-					option := strings.ToLower(scanner.Text())
+					option := ReadLine()
 					if option == "y" || option == "yes" {
 						replace = true
 						replaceIndex = i
@@ -144,10 +142,41 @@ func main() {
 		},
 	}
 
+	restoreCmd := &cobra.Command{
+		Use:   "restore",
+		Short: "Restore stored configs",
+		Run: func(cmd *cobra.Command, args []string) {
+			var options []FileJSON
+			search := args[0]
+			conf := ReadFile()
+			for _, file := range conf.Files {
+				if strings.Contains(file.Path, search) || strings.Contains(file.DisplayName, search) {
+					options = append(options, file)
+				}
+			}
+
+			for i, option := range options {
+				fmt.Printf("%d: %s %s\n", i+1, option.DisplayName, option.Path)
+			}
+
+			option, err := strconv.Atoi(ReadLine())
+			CatchErr(err, "Not a number")
+
+			if option < 1 || option > len(options) {
+				fmt.Println("Not in range")
+				return
+			}
+
+			fmt.Printf("%#v\n", options[option])
+		},
+		Args: cobra.ExactArgs(1),
+	}
+
 	rootCmd.AddCommand(lsCmd)
 	rootCmd.AddCommand(saveCmd)
 	rootCmd.AddCommand(rmCmd)
 	rootCmd.AddCommand(initCmd)
+	rootCmd.AddCommand(restoreCmd)
 
 	rootCmd.Execute()
 }
@@ -178,6 +207,12 @@ func WriteFile(conf ConfJSON) {
 		fmt.Println("Error writing to config file:\n", err)
 		os.Exit(1)
 	}
+}
+
+func ReadLine() string {
+	scanner := bufio.NewScanner(os.Stdin)
+	scanner.Scan()
+	return scanner.Text()
 }
 
 func CatchErr(err error, msg ...string) {
