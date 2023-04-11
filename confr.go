@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"syscall"
@@ -19,6 +20,11 @@ import (
 const CONF_PATH = "./conf.json"
 
 func main() {
+
+	line := ReadLine()
+	arr := StringRange(line)
+	fmt.Println(arr)
+	return
 
 	rootCmd := &cobra.Command{
 		Use:   "confr",
@@ -213,6 +219,62 @@ func ReadLine() string {
 	scanner := bufio.NewScanner(os.Stdin)
 	scanner.Scan()
 	return scanner.Text()
+}
+
+func StringRange(ranges string) []int {
+	regex := regexp.MustCompile(`^!?\d+([,-]!?\d+)*$`)
+	dash := regexp.MustCompile(`^(\d+)-(\d+)$`)
+	if regex.Match([]byte(ranges)) {
+		// compute ranges
+		compiledRange := []int{}
+		segments := strings.Split(ranges, ",")
+		var negativeSegments []int
+		for _, seg := range segments {
+			if seg[0] == '!' {
+				neg, err := strconv.Atoi(seg[1:])
+				CatchErr(err)
+				negativeSegments = append(negativeSegments, neg)
+			} else {
+				if dash.Match([]byte(seg)) {
+					finds := dash.FindStringSubmatch(seg)
+					min, _ := strconv.Atoi(finds[1])
+					max, _ := strconv.Atoi(finds[2])
+					for i := min; i <= max; i++ {
+						compiledRange = append(compiledRange, i)
+					}
+				} else {
+					num, err := strconv.Atoi(seg)
+					CatchErr(err)
+					compiledRange = append(compiledRange, num)
+				}
+			}
+		}
+		for i, seg := range compiledRange {
+			for _, neg := range negativeSegments {
+				if seg == neg {
+					compiledRange = append(compiledRange[:i], compiledRange[i+1:]...)
+				}
+			}
+		}
+		return RemoveDuplicates(compiledRange)
+	} else {
+		fmt.Println("Not valid range")
+		return []int{}
+	}
+}
+
+func RemoveDuplicates(nums []int) []int {
+	unique := make(map[int]bool)
+	result := []int{}
+
+	for _, num := range nums {
+		if !unique[num] {
+			unique[num] = true
+			result = append(result, num)
+		}
+	}
+
+	return result
 }
 
 func CatchErr(err error, msg ...string) {
