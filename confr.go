@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -20,11 +21,6 @@ import (
 const CONF_PATH = "./conf.json"
 
 func main() {
-
-	line := ReadLine()
-	arr := StringRange(line)
-	fmt.Println(arr)
-	return
 
 	rootCmd := &cobra.Command{
 		Use:   "confr",
@@ -149,7 +145,7 @@ func main() {
 	}
 
 	restoreCmd := &cobra.Command{
-		Use:   "restore",
+		Use:   "restore [search]",
 		Short: "Restore stored configs",
 		Run: func(cmd *cobra.Command, args []string) {
 			var options []FileJSON
@@ -165,15 +161,13 @@ func main() {
 				fmt.Printf("%d: %s %s\n", i+1, option.DisplayName, option.Path)
 			}
 
-			option, err := strconv.Atoi(ReadLine())
-			CatchErr(err, "Not a number")
-
-			if option < 1 || option > len(options) {
-				fmt.Println("Not in range")
-				return
+			option := StringRange(ReadLine())
+			for _, i := range option {
+				file := options[i-1]
+				err := os.WriteFile(file.Path, []byte(file.Content), fs.FileMode(ParsePermissions(file).Perms))
+				CatchErr(err)
+				fmt.Println(options[i-1].Path)
 			}
-
-			fmt.Printf("%#v\n", options[option])
 		},
 		Args: cobra.ExactArgs(1),
 	}
@@ -219,6 +213,32 @@ func ReadLine() string {
 	scanner := bufio.NewScanner(os.Stdin)
 	scanner.Scan()
 	return scanner.Text()
+}
+
+func ParsePermissions(file FileJSON) Permission {
+	var output Permission
+	segments := strings.Split(file.Permisions, " ")
+	userGroup := strings.Split(segments[0], ":")
+	output.User = userGroup[0]
+	output.Group = userGroup[1]
+	arr := segments[1][1:] // remove first character which represents type of file
+	perms := 0
+	pos := 0
+	for i, ch := range arr {
+		if i/3 == 0 {
+			pos = 100
+		} else if i/3 == 1 {
+			pos = 10
+		} else {
+			pos = 1
+		}
+
+		if ch != '-' {
+			perms += (1 << (i % 3)) * pos
+		}
+	}
+	output.Perms = perms
+	return output
 }
 
 func StringRange(ranges string) []int {
@@ -300,4 +320,10 @@ type FileJSON struct {
 	Path        string
 	Permisions  string
 	Modified    time.Time
+}
+
+type Permission struct {
+	User  string
+	Group string
+	Perms int
 }
