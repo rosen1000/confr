@@ -13,10 +13,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var ignoreTime bool
+var (
+	ignoreTime bool
+	extra    bool
+)
 
 func InitCommands(root *cobra.Command) {
 	saveCmd.Flags().BoolVar(&ignoreTime, "ignore-time", false, "Bypasses check if a config has changed")
+	lsCmd.Flags().BoolVarP(&extra, "extra", "e", false, "Print extra information about configs")
 
 	root.AddCommand(lsCmd)
 	root.AddCommand(saveCmd)
@@ -29,12 +33,24 @@ var lsCmd = &cobra.Command{
 	Use:     "ls",
 	Aliases: []string{"list"},
 	Short:   "List available configs",
+	Long: `List all available saved configs with their Name, Path and Tags
+Name (Tags): Path
+	
+Example log:
+  zshrc (linux zsh shell) /home/$USER/.zshrc
+	
+Note:
+  Tags are single word tags seperated by spaces but can be split with dashes or underlines (arch-linux)`,
 	Run: func(cmd *cobra.Command, args []string) {
 		conf := ReadFile()
 		text := []string{}
 		for i := 0; i < len(conf.Files); i++ {
 			file := conf.Files[i]
-			text = append(text, fmt.Sprintf("%v%v%v:\n  Size: %v bytes\n  Path: %v\n  Modified: %v", ansicodes.Blue, file.DisplayName, ansicodes.Reset, len(file.Content), file.Path, file.Modified))
+			if extra {
+				text = append(text, fmt.Sprintf("%v%v%v:\n  Tags: %v\n  Size: %v bytes\n  Path: %v\n  Modified: %v", ansicodes.Blue, file.DisplayName, ansicodes.Reset, strings.Join(file.Tags, " "), len(file.Content), file.Path, file.Modified))
+			} else {
+				text = append(text, fmt.Sprintf("%v%v%v (%v%v%v) %v", ansicodes.Blue, file.DisplayName, ansicodes.Reset, ansicodes.Grey, strings.Join(file.Tags, " "), ansicodes.Reset, file.Path))
+			}
 		}
 		fmt.Println(strings.Join(text, "\n"))
 	},
@@ -165,4 +181,13 @@ var restoreCmd = &cobra.Command{
 		}
 	},
 	Args: cobra.ExactArgs(1),
+}
+
+func Format(text string) string {
+	lines := strings.Split(text, "\n")
+	var output []string
+	for _, line := range lines {
+		output = append(output, strings.Trim(line, "\t "))
+	}
+	return strings.Join(output, "\n")
 }

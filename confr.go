@@ -156,7 +156,7 @@ func CatchErr(err error, msg ...string) {
 }
 
 type ConfJSON struct {
-	User     string `json:"user"`
+	User     string `json:"User"`
 	HomePath string
 	Files    []FileJSON
 }
@@ -164,6 +164,7 @@ type ConfJSON struct {
 type FileJSON struct {
 	Content     string
 	DisplayName string
+	Tags        []string
 	Path        string
 	Permisions  string
 	Modified    time.Time
