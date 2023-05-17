@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"os/user"
@@ -10,23 +12,27 @@ import (
 	"syscall"
 
 	ansicodes "github.com/azer/go-ansi-codes"
+	diff "github.com/sergi/go-diff/diffmatchpatch"
 	"github.com/spf13/cobra"
 )
 
 var (
 	ignoreTime bool
-	extra    bool
+	extra      bool
+	yes        bool
 )
 
 func InitCommands(root *cobra.Command) {
 	saveCmd.Flags().BoolVar(&ignoreTime, "ignore-time", false, "Bypasses check if a config has changed")
 	lsCmd.Flags().BoolVarP(&extra, "extra", "e", false, "Print extra information about configs")
+	updateCmd.Flags().BoolVarP(&yes, "yes", "y", false, "Auto accept config updates")
 
 	root.AddCommand(lsCmd)
 	root.AddCommand(saveCmd)
 	root.AddCommand(rmCmd)
 	root.AddCommand(initCmd)
 	root.AddCommand(restoreCmd)
+	root.AddCommand(updateCmd)
 }
 
 var lsCmd = &cobra.Command{
@@ -35,14 +41,14 @@ var lsCmd = &cobra.Command{
 	Short:   "List available configs",
 	Long: `List all available saved configs with their Name, Path and Tags
 Name (Tags): Path
-	
+
 Example log:
   zshrc (linux zsh shell) /home/$USER/.zshrc
-	
+
 Note:
   Tags are single word tags seperated by spaces but can be split with dashes or underlines (arch-linux)`,
 	Run: func(cmd *cobra.Command, args []string) {
-		conf := ReadFile()
+		conf := ReadConf()
 		text := []string{}
 		for i := 0; i < len(conf.Files); i++ {
 			file := conf.Files[i]
@@ -60,7 +66,7 @@ var saveCmd = &cobra.Command{
 	Use:   "save [name] [path]",
 	Short: "Save file to configs",
 	Run: func(cmd *cobra.Command, args []string) {
-		conf := ReadFile()
+		conf := ReadConf()
 
 		replace := false
 		replaceIndex := 0
@@ -117,7 +123,7 @@ var saveCmd = &cobra.Command{
 			conf.Files = append(conf.Files, file)
 		}
 
-		WriteFile(conf)
+		WriteConf(conf)
 		fmt.Println("Saved!")
 	},
 	Args: cobra.ExactArgs(2),
@@ -127,12 +133,12 @@ var rmCmd = &cobra.Command{
 	Use:   "rm [config-name]",
 	Short: "Remove config",
 	Run: func(cmd *cobra.Command, args []string) {
-		conf := ReadFile()
+		conf := ReadConf()
 		for i, file := range conf.Files {
 			if strings.Contains(file.DisplayName, args[0]) {
 				fmt.Println("Found:", file.DisplayName)
 				conf.Files = append(conf.Files[:i], conf.Files[i+1:]...)
-				WriteFile(conf)
+				WriteConf(conf)
 				return
 			}
 		}
@@ -151,7 +157,7 @@ var initCmd = &cobra.Command{
 		CatchErr(err)
 		conf.User = User.Username
 		conf.HomePath = os.Getenv("HOME")
-		WriteFile(conf)
+		WriteConf(conf)
 	},
 }
 
@@ -161,7 +167,7 @@ var restoreCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		var options []FileJSON
 		search := args[0]
-		conf := ReadFile()
+		conf := ReadConf()
 		for _, file := range conf.Files {
 			if strings.Contains(file.Path, search) || strings.Contains(file.DisplayName, search) {
 				options = append(options, file)
@@ -181,6 +187,59 @@ var restoreCmd = &cobra.Command{
 		}
 	},
 	Args: cobra.ExactArgs(1),
+}
+
+var updateCmd = &cobra.Command{
+	Use:   "update",
+	Short: "Checks for updates in existing config files",
+	Run: func(cmd *cobra.Command, args []string) {
+		conf := ReadConf()
+		reader := bufio.NewScanner(os.Stdin)
+		file_loop: for i, file := range conf.Files {
+			stats, err := os.Stat(file.Path)
+			if errors.Is(err, os.ErrNotExist) {
+				continue
+			}
+			// Newer local file
+			if stats.ModTime().Compare(file.Modified) == 1 {
+				if !yes {
+					for {
+						fmt.Printf("%v (%v) is newer in fs. Update? [Ync] ", file.DisplayName, file.Path)
+						var b string
+						dif := diff.New()
+						for reader.Scan() {
+							b = reader.Text()
+							break
+						}
+						if b == "c" {
+							bytes, err := os.ReadFile(file.Path)
+							CatchErr(err)
+							dumps := dif.DiffMain(string(bytes), file.Content, true)
+							fmt.Println(dif.DiffPrettyText(dumps))
+							continue
+						}
+						if b != "\n" && b != "y" {
+							continue file_loop
+						}
+						break
+					}
+				} else {
+					fmt.Printf("%v (%v) is newer in fs. Updating\n", file.DisplayName, file.Path)
+				}
+
+				bytes, err := os.ReadFile(file.Path)
+				if err != nil {
+					fmt.Println("Couldn't read file: ", err)
+					continue
+				}
+				file.Content = string(bytes)
+				file.Modified = stats.ModTime()
+				conf.Files[i] = file
+			}
+		}
+		WriteConf(conf)
+		fmt.Println("Done!")
+	},
 }
 
 func Format(text string) string {

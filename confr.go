@@ -17,6 +17,11 @@ import (
 const CONF_PATH = "./conf.json"
 
 func main() {
+	// s := bufio.NewScanner(os.Stdin)
+	// for s.Scan() {
+	// 		fmt.Println("line", s.Text())
+	// }
+	// return
 	rootCmd := &cobra.Command{
 		Use:   "confr",
 		Short: "Configuration backup tool",
@@ -27,13 +32,13 @@ func main() {
 	rootCmd.Execute()
 }
 
-func ReadFile() ConfJSON {
+func ReadConf() ConfJSON {
 	var result ConfJSON
 	bytes, err := os.ReadFile(CONF_PATH)
 	if err != nil {
 		fmt.Println("Conf file not found. Creating new...")
 		conf := ConfJSON{}
-		WriteFile(conf)
+		WriteConf(conf)
 		return conf
 	}
 	if err := json.Unmarshal(bytes, &result); err != nil {
@@ -43,7 +48,7 @@ func ReadFile() ConfJSON {
 	return result
 }
 
-func WriteFile(conf ConfJSON) {
+func WriteConf(conf ConfJSON) {
 	bytes, err := json.MarshalIndent(conf, "", "  ")
 	if err != nil {
 		fmt.Println("Error parsing config:\n", err)
