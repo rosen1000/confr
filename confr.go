@@ -17,11 +17,6 @@ import (
 const CONF_PATH = "./conf.json"
 
 func main() {
-	// s := bufio.NewScanner(os.Stdin)
-	// for s.Scan() {
-	// 		fmt.Println("line", s.Text())
-	// }
-	// return
 	rootCmd := &cobra.Command{
 		Use:   "confr",
 		Short: "Configuration backup tool",

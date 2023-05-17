@@ -241,12 +241,3 @@ var updateCmd = &cobra.Command{
 		fmt.Println("Done!")
 	},
 }
-
-func Format(text string) string {
-	lines := strings.Split(text, "\n")
-	var output []string
-	for _, line := range lines {
-		output = append(output, strings.Trim(line, "\t "))
-	}
-	return strings.Join(output, "\n")
-}
