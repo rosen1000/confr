@@ -14,6 +14,7 @@ import (
 	ansicodes "github.com/azer/go-ansi-codes"
 	diff "github.com/sergi/go-diff/diffmatchpatch"
 	"github.com/spf13/cobra"
+	"golang.org/x/exp/slices"
 )
 
 var (
@@ -63,7 +64,7 @@ Note:
 }
 
 var saveCmd = &cobra.Command{
-	Use:   "save [name] [path]",
+	Use:   "save [name] [path] [tags...]",
 	Short: "Save file to configs",
 	Run: func(cmd *cobra.Command, args []string) {
 		conf := ReadConf()
@@ -71,6 +72,7 @@ var saveCmd = &cobra.Command{
 		replace := false
 		replaceIndex := 0
 		displayName, filePath := args[0], args[1]
+		tags := args[2:]
 		stats, err := os.Stat(filePath)
 		CatchErr(err, "Error while checking file:")
 		for i, file := range conf.Files {
@@ -99,6 +101,7 @@ var saveCmd = &cobra.Command{
 		path, err := filepath.Abs(args[1])
 		CatchErr(err)
 		file.Path = path
+		file.Tags = tags
 
 		if stats.IsDir() {
 			panic("Directories are not implemented")
@@ -126,7 +129,7 @@ var saveCmd = &cobra.Command{
 		WriteConf(conf)
 		fmt.Println("Saved!")
 	},
-	Args: cobra.ExactArgs(2),
+	Args: cobra.MinimumNArgs(2),
 }
 
 var rmCmd = &cobra.Command{
@@ -169,7 +172,9 @@ var restoreCmd = &cobra.Command{
 		search := args[0]
 		conf := ReadConf()
 		for _, file := range conf.Files {
-			if strings.Contains(file.Path, search) || strings.Contains(file.DisplayName, search) {
+			if strings.Contains(file.Path, search) ||
+				strings.Contains(file.DisplayName, search) ||
+				slices.Contains(file.Tags, search) {
 				options = append(options, file)
 			}
 		}
@@ -195,7 +200,8 @@ var updateCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		conf := ReadConf()
 		reader := bufio.NewScanner(os.Stdin)
-		file_loop: for i, file := range conf.Files {
+	file_loop:
+		for i, file := range conf.Files {
 			stats, err := os.Stat(file.Path)
 			if errors.Is(err, os.ErrNotExist) {
 				continue
