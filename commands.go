@@ -2,6 +2,10 @@ package main
 
 import (
 	"bufio"
+	"bytes"
+	"encoding/json"
+	"io"
+
 	"errors"
 	"fmt"
 	"os"
@@ -11,6 +15,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/andybalholm/brotli"
 	ansicodes "github.com/azer/go-ansi-codes"
 	diff "github.com/sergi/go-diff/diffmatchpatch"
 	"github.com/spf13/cobra"
@@ -34,6 +39,8 @@ func InitCommands(root *cobra.Command) {
 	root.AddCommand(initCmd)
 	root.AddCommand(restoreCmd)
 	root.AddCommand(updateCmd)
+	root.AddCommand(exportCmd)
+	root.AddCommand(importCmd)
 }
 
 var lsCmd = &cobra.Command{
@@ -134,7 +141,7 @@ var saveCmd = &cobra.Command{
 
 var rmCmd = &cobra.Command{
 	Use:   "rm [config-name]",
-	Short: "Remove config",
+	Short: "Remove saved config",
 	Run: func(cmd *cobra.Command, args []string) {
 		conf := ReadConf()
 		for i, file := range conf.Files {
@@ -245,5 +252,60 @@ var updateCmd = &cobra.Command{
 		}
 		WriteConf(conf)
 		fmt.Println("Done!")
+	},
+}
+
+var exportCmd = &cobra.Command{
+	Use: "export",
+	Run: func(cmd *cobra.Command, args []string) {
+		var b bytes.Buffer
+		gz := brotli.NewWriter(&b)
+		var fileBytes []byte
+		var err error
+		if false {
+			fileBytes, err = os.ReadFile(CONF_PATH)
+		} else {
+			fileBytes, err = json.Marshal(ReadConf())
+		}
+		CatchErr(err)
+		if _, err := gz.Write(fileBytes); err != nil {
+			CatchErr(err)
+		}
+		CatchErr(gz.Close())
+		os.WriteFile("confr.save", b.Bytes(), 0755)
+	},
+}
+
+var importCmd = &cobra.Command{
+	Use: "import",
+	Run: func(cmd *cobra.Command, args []string) {
+		// TODO: take saved path as optional argument
+		// TODO: take path as URL
+		file, err := os.Open("confr.save")
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		defer file.Close()
+
+		// Create a brotli reader for the file
+		brotliReader := brotli.NewReader(file)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		// Read the uncompressed data from the brotli reader
+		content, err := io.ReadAll(brotliReader)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		// TODO: save to CONF_PATH
+		// Convert the content to a string and print it
+		text := string(content)
+		fmt.Println("Uncompressed text:")
+		fmt.Println(text)
 	},
 }

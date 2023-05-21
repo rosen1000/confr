@@ -21,4 +21,5 @@
 go.work
 confr
 conf.json
+confr.save*
 test*
