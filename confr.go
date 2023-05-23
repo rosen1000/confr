@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/user"
+	"path"
 	"regexp"
 	"strconv"
 	"strings"
@@ -14,9 +16,21 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const CONF_PATH = "./conf.json"
+// Should not be edited
+var CONF_PATH = "/.local/share/confr.json"
+
+func EnsureConfPath() {
+	user, err := user.Current()
+	CatchErr(err)
+	err = os.MkdirAll(path.Join(user.HomeDir, "/.local/share"), 755)
+	CatchErr(err)
+}
 
 func main() {
+	user, err := user.Current()
+	CatchErr(err)
+	CONF_PATH = path.Join(user.HomeDir, CONF_PATH)
+
 	rootCmd := &cobra.Command{
 		Use:   "confr",
 		Short: "Configuration backup tool",
@@ -29,6 +43,7 @@ func main() {
 
 func ReadConf() ConfJSON {
 	var result ConfJSON
+	EnsureConfPath()
 	bytes, err := os.ReadFile(CONF_PATH)
 	if err != nil {
 		fmt.Println("Conf file not found. Creating new...")
@@ -49,6 +64,7 @@ func WriteConf(conf ConfJSON) {
 		fmt.Println("Error parsing config:\n", err)
 		os.Exit(1)
 	}
+	EnsureConfPath()
 	if err := os.WriteFile(CONF_PATH, bytes, 0644); err != nil {
 		fmt.Println("Error writing to config file:\n", err)
 		os.Exit(1)

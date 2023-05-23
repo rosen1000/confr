@@ -265,6 +265,7 @@ var exportCmd = &cobra.Command{
 		var fileBytes []byte
 		var err error
 		if false {
+			EnsureConfPath()
 			fileBytes, err = os.ReadFile(CONF_PATH)
 		} else {
 			fileBytes, err = json.Marshal(ReadConf())
