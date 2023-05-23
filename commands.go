@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"net/http"
 
 	"errors"
 	"fmt"
@@ -32,6 +33,7 @@ func InitCommands(root *cobra.Command) {
 	saveCmd.Flags().BoolVar(&ignoreTime, "ignore-time", false, "Bypasses check if a config has changed")
 	lsCmd.Flags().BoolVarP(&extra, "extra", "e", false, "Print extra information about configs")
 	updateCmd.Flags().BoolVarP(&yes, "yes", "y", false, "Auto accept config updates")
+	importCmd.Flags().BoolVarP(&yes, "force", "f", false, "Ignore existing saved configs")
 
 	root.AddCommand(lsCmd)
 	root.AddCommand(saveCmd)
@@ -277,11 +279,42 @@ var exportCmd = &cobra.Command{
 }
 
 var importCmd = &cobra.Command{
-	Use: "import",
+	Use: "import [save-path]",
 	Run: func(cmd *cobra.Command, args []string) {
-		// TODO: take saved path as optional argument
-		// TODO: take path as URL
-		file, err := os.Open("confr.save")
+		if _, err := os.Stat(CONF_PATH); err == nil && yes {
+			fmt.Print("You already have confr initialized!\nRunning this command will rewrite current db, continue? [yN] ")
+			resp := strings.ToLower(ReadLine())
+			if resp[0] != 'y' {
+				return
+			}
+		}
+
+		path := "confr.save"
+		if args[0] != "" {
+			if strings.HasPrefix(args[0], "http") {
+				resp, err := http.Get(args[0])
+				CatchErr(err)
+				respBytes, err := io.ReadAll(resp.Body)
+				CatchErr(err)
+				b := bytes.NewReader(respBytes)
+				reader := brotli.NewReader(b)
+				content, err := io.ReadAll(reader)
+				if err != nil {
+					fmt.Println("Provided link does not contain valid confr save file")
+					os.Exit(1)
+				}
+				var conf ConfJSON
+				err = json.Unmarshal(content, &conf)
+				if err != nil {
+					fmt.Println("Provided link does not contain valid confr save file")
+					os.Exit(1)
+				}
+				fmt.Printf("Imported %v files\n", len(conf.Files))
+				return
+			}
+			path = args[0]
+		}
+		file, err := os.Open(path)
 		if err != nil {
 			fmt.Println(err)
 			return
@@ -302,10 +335,12 @@ var importCmd = &cobra.Command{
 			return
 		}
 
-		// TODO: save to CONF_PATH
-		// Convert the content to a string and print it
-		text := string(content)
-		fmt.Println("Uncompressed text:")
-		fmt.Println(text)
+		// Convert the content to a string and save it
+		var conf ConfJSON
+		err = json.Unmarshal(content, &conf)
+		CatchErr(err)
+		WriteConf(conf)
+		fmt.Printf("Imported %v files\n", len(conf.Files))
 	},
+	Args: cobra.MaximumNArgs(1),
 }
