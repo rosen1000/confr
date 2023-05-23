@@ -1,4 +1,4 @@
-module rosen1000/confr
+module github.com/rosen1000/confr
 
 go 1.20
 
